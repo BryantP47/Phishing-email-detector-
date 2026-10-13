@@ -1,0 +1,41 @@
+subject,text,label
+Your account has been suspended,"Dear customer, we detected unusual activity. Verify your account within 24 hours at http://secure-login.xyz or it will be closed.",phishing
+Action required: confirm your identity,Your mailbox will be disabled. Confirm your password immediately using the link below.,phishing
+You have won a prize,"Congratulations! You have won $500,000 in our lottery. Send your bank details to claim your prize.",phishing
+Invoice overdue,Your invoice is overdue. Open the attached file and pay by wire transfer today to avoid legal action.,phishing
+Unusual sign-in attempt,We noticed an unusual sign-in to your account. Click here to secure your account and update your password.,phishing
+Payment failed,We could not process your payment. Update your billing information now or your subscription will be cancelled.,phishing
+Package delivery failed,Your parcel could not be delivered. Pay the redelivery fee at http://bit.ly/redeliver within 48 hours.,phishing
+Tax refund pending,You are eligible for a tax refund. Submit your social security number and bank account to receive your refund.,phishing
+Security alert,Suspicious activity detected on your account. Log in here to verify your identity and restore access.,phishing
+Urgent request from the CEO,I need you to buy gift cards for a client urgently. Send me the codes as soon as possible and keep this confidential.,phishing
+Your password expires today,Your password expires today. Keep your current password by validating your credentials on the portal.,phishing
+Final notice,This is your final notice. Your account will be permanently deleted unless you verify your details immediately.,phishing
+Shared document,A document has been shared with you. Sign in with your email password to view the secure file.,phishing
+Crypto investment opportunity,Double your bitcoin in 24 hours. Send cryptocurrency to this wallet and receive guaranteed returns.,phishing
+Unclaimed inheritance,You are the beneficiary of an unclaimed inheritance. Reply with your full name and bank details.,phishing
+Account locked,Your account has been locked due to unauthorized access. Click the link to unlock your account now.,phishing
+Verify your email,Verify your email address within 24 hours or your account will be terminated. Login here.,phishing
+Refund notification,A refund has been issued to you. Confirm your credit card number and cvv to receive the funds.,phishing
+Voicemail received,You have a new voicemail. Open the attached html file and sign in to listen.,phishing
+Important: update required,Update your payment details immediately to avoid suspension of your service.,phishing
+Team lunch on Friday,"Hi everyone, we're having a team lunch on Friday at noon. Let me know if you have dietary restrictions.",legitimate
+Meeting notes,Here are the notes from today's planning meeting. Next steps are listed at the bottom of the doc.,legitimate
+Your order has shipped,"Hi Sam, your order of a desk lamp has shipped and should arrive on Thursday. Thanks for shopping with us.",legitimate
+Pull request merged,Your pull request fixing the login page layout was merged into main by Jordan.,legitimate
+Weekly newsletter,"This week: new features in the dashboard, a recap of the conference, and upcoming community events.",legitimate
+Re: project timeline,Thanks for the update. I think we can move the deadline for the design review to next Wednesday.,legitimate
+Lunch tomorrow?,"Hey, are you free for lunch tomorrow? There's a new ramen place near the office.",legitimate
+Quarterly report draft,Attached is the draft of the quarterly report. Please add comments on the sales section by Monday.,legitimate
+Welcome to the team,Welcome aboard! Your onboarding schedule for the first week is below. Your manager will meet you at 10am.,legitimate
+Reminder: dentist appointment,This is a reminder of your appointment on Tuesday at 3pm. Reply to reschedule.,legitimate
+Book club pick,This month's book club pick is a mystery novel. We'll meet at the library on the 20th.,legitimate
+Code review feedback,"I left a few comments on your branch. Mostly naming suggestions, the logic looks good.",legitimate
+Holiday schedule,The office will be closed on Monday for the holiday. Enjoy the long weekend.,legitimate
+Flight itinerary,Your flight to Denver departs at 8:15am on Saturday. Seat 14C. Have a great trip.,legitimate
+Photos from the weekend,Here are the photos from the hiking trip. The view from the summit was amazing.,legitimate
+Conference talk accepted,"Congratulations, your talk on data pipelines has been accepted for the spring conference.",legitimate
+Library books due,The books you borrowed are due next week. You can renew them online from your library profile.,legitimate
+Garden club meeting,The garden club meets Saturday morning to plant the spring bulbs. Bring gloves.,legitimate
+Release 2.3 published,Version 2.3 is now available with performance improvements and bug fixes. See the changelog.,legitimate
+Thanks for your help,Thanks for helping me move last weekend. Dinner is on me next time.,legitimate

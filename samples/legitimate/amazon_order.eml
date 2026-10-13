@@ -1,0 +1,14 @@
+From: "Amazon.com" <shipment-tracking@amazon.com>
+To: shopper@example.org
+Subject: Your Amazon.com order has shipped
+Date: Sat, 10 Oct 2026 18:45:00 +0000
+Authentication-Results: mx.example.org; spf=pass smtp.mailfrom=amazon.com; dkim=pass header.d=amazon.com; dmarc=pass header.from=amazon.com
+MIME-Version: 1.0
+Content-Type: text/html; charset="utf-8"
+
+<html><body>
+<p>Hello Jordan,</p>
+<p>Your package with "USB-C cable (2-pack)" has shipped and will arrive Tuesday.</p>
+<p><a href="https://www.amazon.com/gp/your-account/order-details?orderID=112-4455">View or manage your order</a></p>
+<p>Thanks for shopping with us.</p>
+</body></html>
