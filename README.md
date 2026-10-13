@@ -83,3 +83,86 @@ Heuristics are signals, not proof: legitimate bulk mail can trip some rules, and
 targeted phishing from compromised legitimate accounts may pass them. Domain
 handling uses a simplified eTLD+1 approximation rather than the full Public
 Suffix List, and links are analyzed statically (no URLs are fetched).
+
+---
+
+# Malware Analysis Sandbox
+
+`malware_sandbox` triages suspicious files, such as the attachments the phishing
+detector flags. It does **static analysis** in pure Python, with no
+dependencies and nothing executed. It can also do **dynamic analysis**: it
+runs the sample in a locked-down Docker container and records what it does.
+
+```bash
+python -m malware_sandbox analyze suspicious.bin
+python -m malware_sandbox analyze samples/phishing/invoice_malware.eml   # unpacks and scans attachments
+python -m malware_sandbox analyze downloads/ --json --out report.json
+
+python -m malware_sandbox build-image                                     # once, needs Docker
+python -m malware_sandbox analyze samples/sandbox/fake_dropper.sh --dynamic
+```
+
+```
+samples/sandbox/fake_dropper.sh: MALICIOUS (score 100%)
+  Type:    Bash script [bash], 709 bytes, entropy 4.93
+  [script   ] +5.0  Opens a reverse shell: '/dev/tcp/203.0.113.10/4444'
+  [behavior ] +4.0  Writes shell profile: /tmp/home/.bashrc
+  [behavior ] +3.0  Executes a file it dropped: /tmp/.cache-update
+  [behavior ] +3.0  Deletes its own file after starting
+  [behavior ] +2.0  Attempts outbound connection to 203.0.113.10:4444
+  ...
+  Dynamic analysis:
+    exit code 0 after 0.4s in image malware-sandbox:latest
+    processes: /bin/bash ./sample; chmod +x /tmp/.cache-update; /tmp/.cache-update; uname -a; ...
+    network: connect 203.0.113.10:4444 (ENETUNREACH)
+    files_deleted: /tmp/work/sample
+```
+
+Each file gets a verdict of `clean` (< 40%), `suspicious` (40–70%) or `malicious` (≥ 70%),
+plus its hashes, findings, IOCs (URLs, IPs, domains, registry keys, wallets) and
+format-specific details. Archives and e-mails are scored by their own
+findings plus those of their most suspicious member. The exit code is `1` if any file is
+malicious and `2` on errors.
+
+## Static analysis
+
+| Format | What is checked |
+|---|---|
+| All files | MD5/SHA1/SHA256, real type from magic bytes, entropy, ASCII + UTF-16 strings, IOCs, built-in signatures (EICAR, Mimikatz, Meterpreter, Cobalt Strike, Mirai, XMRig, ransom notes, web shells), optional YARA rules (`--yara rules.yar`, needs `pip install yara-python`), double extensions, RTLO tricks, extension vs. content mismatch |
+| Windows PE | Header, sections, imports; packer section names, high-entropy / writable+executable sections, odd entry point, tiny import tables, API combinations for process injection, keylogging, anti-debugging, downloading, crypto, services, privileges |
+| Linux ELF | Architecture, interpreter, UPX packing, stripped / missing section headers, executable stack, IoT architectures |
+| Office | VBA macro source extracted and decompressed from OLE and OOXML files (MS-OVBA), auto-exec macros, shell/download/API calls, remote template injection, DDE, ActiveX, embedded objects, Equation Editor exploits (RTF/OLE) |
+| PDF | `/OpenAction`, `/AA`, `/JavaScript`, `/Launch`, embedded files, XFA, hex-escaped names; FlateDecode streams inflated to find hidden JavaScript and exploit APIs (`util.printf`, `Collab.getIcon`, heap spray) |
+| Scripts | PowerShell, VBScript, JScript, batch, shell, Python, HTA and HTML: download cradles, `-EncodedCommand` (decoded and re-scanned), base64 blobs, AMSI/Defender tampering, LOLBins, persistence, reverse shells, ransomware commands, miners, HTML smuggling |
+| Containers | ZIP/JAR, gzip, tar and `.eml` files are unpacked in memory and analyzed recursively. The analyzer checks for encrypted archives, path traversal and zip bombs, and enforces size, member and depth limits. For e-mails, it also reports the phishing detector's verdict on the message. |
+
+## Dynamic analysis (`--dynamic`)
+
+ELF binaries and shell, bash, Python and Perl scripts are run under `strace`
+inside the `malware-sandbox` image. Windows binaries and documents get static
+analysis only. The container runs with:
+
+- `--network none`: there is no network. Connection attempts are still logged
+  (for example `ENETUNREACH`).
+- `--read-only` root filesystem. Only a 64 MB `/tmp` tmpfs is writable.
+- `--cap-drop ALL`, `--security-opt no-new-privileges`, and a non-root user (uid 1000).
+- Memory, CPU, PID, open-file and file-size limits, and a hard kill on timeout (`--timeout`, default 30 s).
+- The sample is mounted read-only. Only the syscall trace, stdout/stderr and a
+  list of created files (path, size, SHA256) come back to the host. Dropped
+  files themselves are never copied out.
+
+The syscall trace becomes behavior findings: spawned processes and their
+command lines, network connections, dropped and executed files, persistence
+(cron, systemd, shell profiles, `authorized_keys`, `ld.so.preload`),
+credential reads, self-deletion, anti-debugging (`PTRACE_TRACEME`), process
+renaming, fileless execution (`memfd_create`), privilege escalation attempts
+and fork bombs.
+
+> **Isolation caveat:** containers share the host kernel. Only detonate real
+> malware on a disposable machine or VM. For stronger isolation, use gVisor
+> (`--runtime runsc`). To support more formats, extend
+> `malware_sandbox/docker/Dockerfile`, for example with Node.js or Wine.
+
+Run the Docker integration tests with `SANDBOX_DOCKER_TESTS=1 python -m unittest discover tests`
+after building the image. `samples/sandbox/fake_dropper.sh` is a harmless
+script that only imitates dropper behavior, for demos.

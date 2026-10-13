@@ -5,13 +5,20 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "phishing-email-detector"
 version = "0.1.0"
-description = "Detect phishing emails with explainable heuristics and an optional Naive Bayes model"
+description = "Detect phishing emails and triage malicious attachments in a malware analysis sandbox"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = []
 
+[project.optional-dependencies]
+yara = ["yara-python"]
+
 [project.scripts]
 phishing-detector = "phishing_detector.cli:main"
+malware-sandbox = "malware_sandbox.cli:main"
 
 [tool.setuptools]
-packages = ["phishing_detector"]
+packages = ["phishing_detector", "malware_sandbox"]
+
+[tool.setuptools.package-data]
+malware_sandbox = ["docker/Dockerfile", "docker/run.sh"]
