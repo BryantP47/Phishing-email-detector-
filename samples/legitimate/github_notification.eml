@@ -1,0 +1,15 @@
+From: GitHub <notifications@github.com>
+To: dev@example.org
+Subject: [example/repo] Pull request merged (#42)
+Date: Mon, 12 Oct 2026 15:20:00 +0000
+Authentication-Results: mx.example.org; spf=pass smtp.mailfrom=github.com; dkim=pass header.d=github.com; dmarc=pass header.from=github.com
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Merged #42 into main.
+
+View it on GitHub:
+https://github.com/example/repo/pull/42
+
+You are receiving this because you were mentioned.
+Reply to this email directly or view it on GitHub.

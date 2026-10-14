@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phishing-email-detector"
+version = "0.1.0"
+description = "Detect phishing emails with explainable heuristics and an optional Naive Bayes model"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+phishing-detector = "phishing_detector.cli:main"
+
+[tool.setuptools]
+packages = ["phishing_detector"]

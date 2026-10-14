@@ -1,0 +1,20 @@
+From: Alice Johnson <alice@example.org>
+To: team@example.org
+Subject: Notes from Thursday's planning meeting
+Date: Fri, 09 Oct 2026 12:00:00 +0000
+Authentication-Results: mx.example.org; spf=pass smtp.mailfrom=example.org; dkim=pass header.d=example.org; dmarc=pass
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Hi all,
+
+Thanks for joining yesterday. Quick summary:
+
+- Release 2.3 is planned for the end of the month.
+- Bob will draft the migration guide.
+- I've put the slides in the shared drive: https://drive.example.org/planning/q4
+
+Let me know if I missed anything.
+
+Cheers,
+Alice
