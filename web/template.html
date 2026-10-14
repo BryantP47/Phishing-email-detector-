@@ -1,0 +1,937 @@
+<title>Phishing Email Detector</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a two-pane workbench. The email source sits on the left, the verdict and its evidence on the right; the panes stack below 900px. */
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --surface-2: #e4e9f0;
+  --fg: #141c28;
+  --muted: #566275;
+  --line: #d3dae4;
+  --accent: #2c55c7;
+  --accent-fg: #ffffff;
+  --safe: #17704a;
+  --safe-bg: #dff1e7;
+  --warn: #8f5a00;
+  --warn-bg: #f9edd3;
+  --danger: #b0261b;
+  --danger-bg: #fbe3df;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Instrument Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e131b; --surface: #151c27; --surface-2: #1d2634; --fg: #e5eaf1; --muted: #97a2b4; --line: #2a3446;
+    --accent: #85a6ff; --accent-fg: #0b1020;
+    --safe: #63d29d; --safe-bg: #11301f; --warn: #f0b850; --warn-bg: #33270e; --danger: #ff8d7d; --danger-bg: #3b1713;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e131b; --surface: #151c27; --surface-2: #1d2634; --fg: #e5eaf1; --muted: #97a2b4; --line: #2a3446;
+  --accent: #85a6ff; --accent-fg: #0b1020;
+  --safe: #63d29d; --safe-bg: #11301f; --warn: #f0b850; --warn-bg: #33270e; --danger: #ff8d7d; --danger-bg: #3b1713;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 40px;
+}
+.page { max-width: 1240px; margin: 0 auto; display: grid; gap: 24px; }
+
+header.top { display: grid; gap: 6px; }
+h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(1.7rem, 1.2rem + 1.6vw, 2.4rem);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  margin: 0;
+  text-wrap: balance;
+}
+.lede { margin: 0; color: var(--muted); max-width: 68ch; }
+.lede strong { color: var(--fg); font-weight: 600; }
+
+.work { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 900px) { .work { grid-template-columns: minmax(0, 1fr); } textarea { min-height: 220px; } }
+
+.pane { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }
+.pane-head { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.pane-title { font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; margin: 0; }
+.pane-body { padding: 16px; display: grid; gap: 14px; min-width: 0; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+select, button, .file-btn {
+  font: inherit; font-size: 0.875rem;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); color: var(--fg);
+  padding: 7px 11px; cursor: pointer; line-height: 1.2;
+}
+select { max-width: 100%; }
+button:hover, .file-btn:hover, select:hover { border-color: var(--accent); }
+button:focus-visible, select:focus-visible, .file-btn:focus-within, textarea:focus-visible, summary:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.file-btn { display: inline-flex; align-items: center; gap: 6px; }
+.file-btn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.btn-primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
+
+textarea {
+  width: 100%;
+  min-height: 420px;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--fg);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  white-space: pre;
+  overflow: auto;
+}
+textarea.dragging { border-color: var(--accent); border-style: dashed; }
+.hint { font-size: 0.8125rem; color: var(--muted); margin: 0; }
+
+details.howto { border-top: 1px solid var(--line); padding-top: 12px; }
+details.howto summary { cursor: pointer; font-weight: 600; font-size: 0.9375rem; }
+details.howto ul { margin: 10px 0 0; padding-left: 20px; display: grid; gap: 6px; font-size: 0.875rem; }
+details.howto b { font-weight: 600; }
+
+/* Verdict band */
+.verdict { border-radius: var(--radius) var(--radius) 0 0; padding: 18px 16px 16px; display: grid; gap: 12px; }
+.verdict[data-v="phishing"] { background: var(--danger-bg); --tone: var(--danger); }
+.verdict[data-v="suspicious"] { background: var(--warn-bg); --tone: var(--warn); }
+.verdict[data-v="legitimate"] { background: var(--safe-bg); --tone: var(--safe); }
+.verdict-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.verdict-word {
+  font-family: var(--font-display); font-weight: 700; color: var(--tone);
+  font-size: clamp(1.9rem, 1.4rem + 1.6vw, 2.6rem); line-height: 1; margin: 0; letter-spacing: -0.01em;
+}
+.verdict-score { font-family: var(--font-mono); font-size: 0.9375rem; color: var(--fg); font-variant-numeric: tabular-nums; }
+.verdict-score b { font-size: 1.35rem; font-weight: 500; }
+.verdict-note { margin: 0; font-size: 0.9375rem; }
+
+.meter { position: relative; height: 10px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
+.meter-fill { position: absolute; inset: 0 auto 0 0; background: var(--tone); border-radius: 99px; transition: width 0.4s ease; }
+.meter-scale { position: relative; height: 16px; font-family: var(--font-mono); font-size: 0.6875rem; color: var(--muted); }
+.meter-scale span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.meter-scale span::before { content: ""; position: absolute; left: 50%; top: -14px; width: 1px; height: 10px; background: var(--muted); opacity: 0.6; }
+.meter-scale .end { transform: none; }
+.meter-scale .end::before { display: none; }
+
+.meta { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 0; font-size: 0.875rem; }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: 0.8125rem; }
+
+.notice { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--fg); font-size: 0.875rem; }
+
+.section-title {
+  margin: 0; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+  display: flex; gap: 8px; align-items: baseline;
+}
+.section-title .count { font-family: var(--font-mono); letter-spacing: 0; }
+
+.findings { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.findings li { display: grid; grid-template-columns: 3.4rem minmax(0, 1fr); gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); align-items: start; }
+.findings li:first-child { border-top: 0; padding-top: 2px; }
+.pts {
+  font-family: var(--font-mono); font-size: 0.8125rem; font-variant-numeric: tabular-nums; text-align: center;
+  padding: 2px 0; border-radius: 6px; background: var(--surface-2);
+}
+.pts.high { background: var(--danger-bg); color: var(--danger); }
+.pts.mid { background: var(--warn-bg); color: var(--warn); }
+.f-text { margin: 0; overflow-wrap: anywhere; }
+.f-cat { font-size: 0.75rem; color: var(--muted); }
+.empty { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.8125rem; }
+th, td { text-align: left; padding: 8px 10px; vertical-align: top; border-top: 1px solid var(--line); }
+thead th { border-top: 0; background: var(--surface-2); font-weight: 600; font-size: 0.75rem; color: var(--muted); }
+td.url { font-family: var(--font-mono); font-size: 0.75rem; word-break: break-all; min-width: 12rem; }
+td.shown { overflow-wrap: anywhere; min-width: 7rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.chip { font-family: var(--font-body); font-size: 0.6875rem; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: var(--danger-bg); color: var(--danger); word-break: normal; }
+.chip.ok { background: var(--safe-bg); color: var(--safe); }
+
+footer.foot { color: var(--muted); font-size: 0.8125rem; display: grid; gap: 4px; max-width: 80ch; }
+footer.foot p { margin: 0; }
+a { color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) { .meter-fill { transition: none; } }
+</style>
+
+<div class="page">
+  <header class="top">
+    <h1>Phishing Email Detector</h1>
+    <p class="lede">Paste an email's original source to check it for phishing warning signs. <strong>Everything runs in your browser; the email is never uploaded.</strong></p>
+  </header>
+
+  <main class="work">
+    <section class="pane" aria-labelledby="in-title">
+      <div class="pane-head">
+        <h2 class="pane-title" id="in-title">Email source</h2>
+        <div class="controls">
+          <label class="file-btn">Open .eml file<input type="file" id="file" accept=".eml,.txt,message/rfc822,text/plain"></label>
+          <button type="button" id="clear">Clear</button>
+        </div>
+      </div>
+      <div class="pane-body">
+        <div class="controls">
+          <label for="sample" class="hint">Try an example:</label>
+          <select id="sample"></select>
+        </div>
+        <textarea id="source" spellcheck="false" aria-label="Email source" placeholder="Paste the full original source of the email here, or drop an .eml file onto this box."></textarea>
+        <p class="hint">Checks run as you type. You can also drop an .eml file onto the box.</p>
+        <details class="howto" id="howto">
+          <summary>How do I get an email's original source?</summary>
+          <ul>
+            <li><b>Gmail:</b> open the email, click <b>⋮</b> (More) next to Reply, choose <b>Show original</b>, then <b>Copy to clipboard</b>.</li>
+            <li><b>Outlook.com / new Outlook:</b> open the email, click <b>…</b>, then <b>View → View message source</b>. Select all and copy.</li>
+            <li><b>Outlook for Windows (classic):</b> double-click the email to open it, then <b>File → Properties</b>. The <b>Internet headers</b> box has headers only, so paste them and then the message text below them.</li>
+            <li><b>Apple Mail:</b> select the email, then <b>View → Message → Raw Source</b>. Select all and copy.</li>
+            <li><b>Yahoo Mail:</b> open the email, click <b>…</b> (More), then <b>View raw message</b>.</li>
+          </ul>
+          <p class="hint" style="margin-top:10px">Pasting only the visible message text works too, but the sender checks need the full source.</p>
+        </details>
+      </div>
+    </section>
+
+    <section class="pane" id="result" aria-live="polite" aria-labelledby="out-title">
+      <h2 class="pane-title" id="out-title" hidden>Result</h2>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p>A warning sign is not proof, and a clean result is not a guarantee. Phishing sent from a real but hacked account can look clean. When in doubt, contact the sender through a channel you already trust, and never sign in through a link in the email.</p>
+    <p>This page uses the rule checks from the <a href="https://github.com/BryantP47/Phishing-email-detector-" target="_blank" rel="noopener">Phishing Email Detector</a> project. Links are listed but never opened.</p>
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+const SAMPLES = /*SAMPLES*/[];
+
+// --------------------------------------------------------------------------
+// Reference data (mirrors phishing_detector/rules.py)
+// --------------------------------------------------------------------------
+const BRANDS = {
+  paypal: ["paypal.com"],
+  apple: ["apple.com", "icloud.com"],
+  microsoft: ["microsoft.com", "live.com", "outlook.com", "office.com", "office365.com"],
+  amazon: ["amazon.com", "amazon.co.uk", "amazon.de", "amazonses.com"],
+  google: ["google.com", "gmail.com", "youtube.com"],
+  netflix: ["netflix.com"],
+  facebook: ["facebook.com", "facebookmail.com", "meta.com"],
+  instagram: ["instagram.com"],
+  linkedin: ["linkedin.com"],
+  dropbox: ["dropbox.com"],
+  docusign: ["docusign.com", "docusign.net"],
+  chase: ["chase.com"],
+  wellsfargo: ["wellsfargo.com"],
+  bankofamerica: ["bankofamerica.com"],
+  dhl: ["dhl.com"],
+  fedex: ["fedex.com"],
+  ups: ["ups.com"],
+  usps: ["usps.com"],
+  irs: ["irs.gov"],
+  coinbase: ["coinbase.com"],
+};
+const BRAND_LABELS = { wellsfargo: "Wells Fargo", bankofamerica: "Bank of America", paypal: "PayPal", docusign: "DocuSign",
+  linkedin: "LinkedIn", fedex: "FedEx", ups: "UPS", usps: "USPS", irs: "IRS", dhl: "DHL" };
+const brandLabel = (b) => BRAND_LABELS[b] || b.charAt(0).toUpperCase() + b.slice(1);
+const BRAND_WORDS = { wellsfargo: ["wells", "fargo"], bankofamerica: ["bank", "of", "america"] };
+
+const URL_SHORTENERS = new Set(["bit.ly", "tinyurl.com", "goo.gl", "t.co", "ow.ly", "is.gd", "buff.ly",
+  "rebrand.ly", "cutt.ly", "shorturl.at", "rb.gy", "tiny.cc", "s.id", "t.ly"]);
+const SUSPICIOUS_TLDS = new Set(["zip", "mov", "xyz", "top", "tk", "ml", "ga", "cf", "gq", "work", "click",
+  "link", "country", "kim", "loan", "men", "review", "date", "racing", "download", "stream", "gdn", "rest",
+  "fit", "cam", "icu", "sbs", "cfd"]);
+const FREE_MAIL_DOMAINS = new Set(["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "aol.com",
+  "mail.com", "gmx.com", "protonmail.com", "proton.me", "yandex.com", "icloud.com"]);
+const DANGEROUS_EXTENSIONS = new Set(["exe", "scr", "bat", "cmd", "com", "pif", "js", "jse", "vbs", "vbe", "wsf",
+  "hta", "msi", "jar", "ps1", "lnk", "iso", "img", "vhd", "reg", "cpl", "docm", "xlsm", "pptm", "html", "htm", "svg", "one"]);
+const ARCHIVE_EXTENSIONS = new Set(["zip", "rar", "7z", "gz", "tar", "ace", "cab"]);
+
+const URGENCY_PATTERNS = [
+  String.raw`\burgent(ly)?\b`, String.raw`\bimmediate(ly)?\b`, String.raw`\bact now\b`, String.raw`\bwithin (24|48|72) hours\b`,
+  String.raw`\bas soon as possible\b`, String.raw`\bfinal (notice|warning|reminder)\b`, String.raw`\bexpires? (today|soon)\b`,
+  String.raw`\blast chance\b`, String.raw`\btime[- ]sensitive\b`, String.raw`\bdeadline\b`,
+];
+const THREAT_PATTERNS = [
+  String.raw`\b(account|access) (has been |will be )?(suspended|locked|disabled|terminated|closed|restricted)\b`,
+  String.raw`\bunusual (sign[- ]in|login|activity)\b`, String.raw`\bsuspicious activity\b`,
+  String.raw`\bunauthori[sz]ed (access|transaction|login)\b`, String.raw`\bpermanently (deleted|closed|suspended)\b`,
+  String.raw`\blegal action\b`, String.raw`\bfailure to (comply|verify|respond)\b`,
+];
+const CREDENTIAL_PATTERNS = [
+  String.raw`\bverify your (account|identity|information|details|email)\b`,
+  String.raw`\bconfirm your (account|identity|password|details|information|billing)\b`,
+  String.raw`\b(update|validate|re-?enter) your (payment|billing|account|credit card|password|details)\b`,
+  String.raw`\b(password|passcode|pin|social security|ssn|credit card number|cvv|login credentials)\b`,
+  String.raw`\blog ?in (here|below|now)\b`, String.raw`\bsign ?in to (restore|verify|unlock)\b`,
+];
+const FINANCIAL_PATTERNS = [
+  String.raw`\byou('ve| have)? won\b`, String.raw`\bprize\b`, String.raw`\blottery\b`, String.raw`\binheritance\b`,
+  String.raw`\bwire transfer\b`, String.raw`\bgift ?cards?\b`, String.raw`\bbitcoin\b`, String.raw`\bcrypto(currency)?\b`,
+  String.raw`\brefund\b`, String.raw`\binvoice (attached|overdue)\b`, String.raw`\bunclaimed\b`, String.raw`\bbeneficiary\b`,
+];
+const GENERIC_GREETINGS = [
+  String.raw`^\s*dear (customer|user|client|member|account holder|valued customer|sir|madam|sir/madam)\b`,
+  String.raw`^\s*hello (customer|user)\b`,
+];
+
+// --------------------------------------------------------------------------
+// MIME parsing
+// --------------------------------------------------------------------------
+function decodeBytes(bytes, charset) {
+  try { return new TextDecoder(charset || "utf-8").decode(bytes); }
+  catch (e) { return new TextDecoder("utf-8").decode(bytes); }
+}
+
+function b64bytes(s) {
+  s = s.replace(/[^A-Za-z0-9+/]/g, "");
+  while (s.length % 4) s += "=";
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function qpBytes(s, softBreaks = true) {
+  if (softBreaks) s = s.replace(/=[ \t]*\n/g, "");
+  const chars = Array.from(s);
+  const enc = new TextEncoder();
+  const out = [];
+  for (let i = 0; i < chars.length; i++) {
+    const c = chars[i];
+    if (c === "=" && /^[0-9A-Fa-f]{2}$/.test((chars[i + 1] || "") + (chars[i + 2] || ""))) {
+      out.push(parseInt(chars[i + 1] + chars[i + 2], 16));
+      i += 2;
+    } else {
+      for (const b of enc.encode(c)) out.push(b);
+    }
+  }
+  return new Uint8Array(out);
+}
+
+function decodeWords(s) {
+  return s
+    .replace(/(=\?[^?]+\?[bq]\?[^?]*\?=)\s+(?==\?)/gi, "$1")
+    .replace(/=\?([^?]+)\?([bq])\?([^?]*)\?=/gi, (all, cs, enc, txt) => {
+      try {
+        const bytes = enc.toLowerCase() === "b" ? b64bytes(txt) : qpBytes(txt.replace(/_/g, " "), false);
+        return decodeBytes(bytes, cs);
+      } catch (e) { return all; }
+    });
+}
+
+function splitHead(raw) {
+  const i = raw.indexOf("\n\n");
+  const head = i < 0 ? raw : raw.slice(0, i);
+  const body = i < 0 ? "" : raw.slice(i + 2);
+  const headers = [];
+  for (const line of head.replace(/\n[ \t]+/g, " ").split("\n")) {
+    const c = line.indexOf(":");
+    if (c <= 0 || /\s/.test(line.slice(0, c))) continue;
+    headers.push([line.slice(0, c), decodeWords(line.slice(c + 1).trim())]);
+  }
+  return { headers, body };
+}
+
+function getHeader(headers, name) {
+  name = name.toLowerCase();
+  return headers.filter((h) => h[0].toLowerCase() === name).map((h) => h[1]);
+}
+
+function headerParams(value) {
+  const out = {};
+  const re = /;\s*([\w*.-]+)\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^;\s]+))/g;
+  let m;
+  while ((m = re.exec(value))) {
+    let key = m[1].toLowerCase();
+    let val = m[2] !== undefined ? m[2] : m[3];
+    if (key.endsWith("*")) {
+      key = key.replace(/\*\d*\*?$/, "");
+      const p = val.match(/^([^']*)'[^']*'(.*)$/);
+      if (p) { try { val = decodeURIComponent(p[2]); } catch (e) { /* keep raw */ } }
+    }
+    out[key] = val;
+  }
+  return out;
+}
+
+function walkPart(raw, out, depth) {
+  const { headers, body } = splitHead(raw);
+  const ctRaw = getHeader(headers, "content-type")[0] || "text/plain";
+  const ctype = ctRaw.split(";")[0].trim().toLowerCase();
+  const ctParams = headerParams(ctRaw);
+  const cdRaw = getHeader(headers, "content-disposition")[0] || "";
+  const disposition = cdRaw.split(";")[0].trim().toLowerCase();
+  const filename = headerParams(cdRaw).filename || ctParams.name || "";
+
+  if (ctype.startsWith("multipart/") && ctParams.boundary && depth < 20) {
+    const boundary = "--" + ctParams.boundary;
+    let current = null;
+    for (const line of body.split("\n")) {
+      const t = line.trimEnd();
+      if (t === boundary + "--") {
+        if (current) walkPart(current.join("\n"), out, depth + 1);
+        current = null;
+        break;
+      }
+      if (t === boundary) {
+        if (current) walkPart(current.join("\n"), out, depth + 1);
+        current = [];
+        continue;
+      }
+      if (current) current.push(line);
+    }
+    if (current) walkPart(current.join("\n"), out, depth + 1);
+    return;
+  }
+  if (filename || disposition === "attachment") {
+    out.attachments.push(filename || "(unnamed)");
+    return;
+  }
+  if (ctype === "message/rfc822" && depth < 20) {
+    walkPart(body, out, depth + 1);
+    return;
+  }
+  if (ctype === "text/plain" || ctype === "text/html") {
+    const cte = (getHeader(headers, "content-transfer-encoding")[0] || "").trim().toLowerCase();
+    let text = body;
+    try {
+      if (cte === "base64") text = decodeBytes(b64bytes(body), ctParams.charset);
+      else if (cte === "quoted-printable") text = decodeBytes(qpBytes(body), ctParams.charset);
+    } catch (e) { text = body; }
+    (ctype === "text/plain" ? out.text : out.html).push(text);
+  }
+}
+
+function splitAddressList(value) {
+  const parts = [];
+  let cur = "", quoted = false, angle = 0;
+  for (const c of value) {
+    if (c === '"') quoted = !quoted;
+    else if (c === "<" && !quoted) angle++;
+    else if (c === ">" && !quoted && angle) angle--;
+    if (c === "," && !quoted && !angle) { parts.push(cur); cur = ""; }
+    else cur += c;
+  }
+  if (cur.trim()) parts.push(cur);
+  return parts;
+}
+
+function parseAddress(value) {
+  value = (value || "").trim();
+  const m = value.match(/^(.*?)<([^>]*)>\s*$/);
+  if (m) return { name: m[1].trim().replace(/^"(.*)"$/, "$1").trim(), address: m[2].trim().toLowerCase() };
+  const a = value.match(/[^\s<>"]+@[^\s<>"]+/);
+  return { name: "", address: a ? a[0].toLowerCase() : "" };
+}
+
+function domainOf(address) {
+  address = (address || "").trim().replace(/^<|>$/g, "");
+  const at = address.lastIndexOf("@");
+  return at < 0 ? "" : address.slice(at + 1).toLowerCase().replace(/\.$/, "");
+}
+
+const URL_RE = /\b((?:https?:\/\/|www\.)[^\s<>"'()\[\]]+)/gi;
+const KNOWN_HEADERS = /^(from|to|cc|subject|date|received|return-path|message-id|mime-version|content-type|reply-to|delivered-to|authentication-results|received-spf|dkim-signature)$/i;
+
+function parseEmail(raw) {
+  raw = raw.replace(/\r\n?/g, "\n").replace(/^\s+/, "");
+  const { headers } = splitHead(raw);
+  const hasHeaders = headers.some((h) => KNOWN_HEADERS.test(h[0]));
+  const parts = { text: [], html: [], attachments: [] };
+  if (hasHeaders) walkPart(raw, parts, 0);
+  else if (/<(html|body|a|div|p|table|br)\b/i.test(raw)) parts.html.push(raw);
+  else parts.text.push(raw);
+
+  const hdrs = hasHeaders ? headers : [];
+  const from = parseAddress(getHeader(hdrs, "from")[0]);
+  const email = {
+    hasHeaders,
+    headers: hdrs,
+    subject: getHeader(hdrs, "subject")[0] || "",
+    fromName: from.name,
+    fromAddress: from.address,
+    replyTo: getHeader(hdrs, "reply-to").flatMap(splitAddressList).map((a) => parseAddress(a).address).filter(Boolean),
+    returnPath: parseAddress(getHeader(hdrs, "return-path")[0]).address,
+    textBody: parts.text.join("\n"),
+    htmlBody: parts.html.join("\n"),
+    attachments: parts.attachments,
+    links: [],
+    hasForms: false,
+    htmlText: "",
+  };
+  email.header = (name) => getHeader(email.headers, name);
+  email.fromDomain = domainOf(email.fromAddress);
+
+  const seen = new Set();
+  if (email.htmlBody) {
+    // DOMParser builds an inert document: no scripts run and no images or links load.
+    const doc = new DOMParser().parseFromString(email.htmlBody, "text/html");
+    doc.querySelectorAll("script, style, head").forEach((n) => n.remove());
+    for (const node of doc.querySelectorAll("a[href], form")) {
+      const isForm = node.tagName === "FORM";
+      if (isForm) email.hasForms = true;
+      const url = (node.getAttribute(isForm ? "action" : "href") || "").trim();
+      if (!url || seen.has(url)) continue;
+      seen.add(url);
+      email.links.push({ url, text: isForm ? "(form submits to)" : node.textContent.replace(/\s+/g, " ").trim(), isForm });
+    }
+    doc.querySelectorAll("br, p, div, tr, li").forEach((n) => n.after(doc.createTextNode("\n")));
+    email.htmlText = doc.body ? doc.body.textContent : "";
+  }
+  for (const m of email.textBody.matchAll(URL_RE)) {
+    const url = m[1].replace(/[.,;:!?]+$/, "");
+    if (!seen.has(url)) { seen.add(url); email.links.push({ url, text: "" }); }
+  }
+  email.body = email.textBody.trim() ? email.textBody : email.htmlText;
+  email.fullText = email.subject + "\n" + email.body;
+  return email;
+}
+
+// --------------------------------------------------------------------------
+// Helpers
+// --------------------------------------------------------------------------
+function isIp(host) {
+  const h = (host || "").replace(/^\[|\]$/g, "");
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return h.split(".").every((n) => Number(n) <= 255);
+  if (h.includes(":") && /^[0-9a-f:.]+$/i.test(h)) return true;
+  return /^(0x[0-9a-f]+|\d{8,10})$/i.test(h);
+}
+
+const COMMON_SECOND_LEVEL = new Set(["co", "com", "net", "org", "gov", "ac", "edu"]);
+function registrableDomain(host) {
+  host = (host || "").toLowerCase().replace(/^\.+|\.+$/g, "");
+  if (isIp(host)) return host;
+  const parts = host.split(".");
+  if (parts.length <= 2) return host;
+  if (parts[parts.length - 1].length === 2 && COMMON_SECOND_LEVEL.has(parts[parts.length - 2])) return parts.slice(-3).join(".");
+  return parts.slice(-2).join(".");
+}
+
+function parseUrl(url) {
+  if (/^www\./i.test(url)) url = "http://" + url;
+  try { return new URL(url); } catch (e) { return null; }
+}
+function urlHost(url) {
+  const u = parseUrl(url);
+  return u ? u.hostname.toLowerCase() : "";
+}
+
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  if (a.length < b.length) [a, b] = [b, a];
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur.push(Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] !== b[j - 1] ? 1 : 0)));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+const HOMOGLYPHS = { "0": "o", "1": "l", "3": "e", "4": "a", "5": "s", "7": "t", "$": "s", "@": "a" };
+const normalizeToken = (t) => Array.from(t, (c) => HOMOGLYPHS[c] || c).join("").replaceAll("rn", "m").replaceAll("vv", "w");
+
+function lookalikeBrand(domain) {
+  const reg = registrableDomain(domain);
+  if (!reg || isIp(reg)) return null;
+  if (Object.values(BRANDS).some((legit) => legit.includes(reg))) return null;
+  const tokens = domain.toLowerCase().split(/[.\-]/).filter(Boolean);
+  const candidates = new Set([...tokens, ...tokens.map(normalizeToken)]);
+  for (const brand of Object.keys(BRANDS)) {
+    for (const t of candidates) {
+      if (t === brand) return brand;
+      if (brand.length >= 6 && t.includes(brand)) return brand;
+      if (brand.length >= 6 && Math.abs(t.length - brand.length) <= 1 && levenshtein(t, brand) === 1) return brand;
+    }
+  }
+  return null;
+}
+
+function findPatterns(text, patterns) {
+  const hits = [];
+  for (const p of patterns) {
+    const m = text.match(new RegExp(p, "im"));
+    if (m) hits.push(m[0].trim());
+  }
+  return hits;
+}
+
+const BRAND_MENTION_RE = Object.fromEntries(Object.keys(BRANDS).map((b) =>
+  [b, new RegExp("\\b" + (BRAND_WORDS[b] || [b]).join("\\s?") + "\\b", "i")]));
+const brandsMentioned = (text) => Object.keys(BRANDS).filter((b) => BRAND_MENTION_RE[b].test(text));
+
+const quoteList = (hits) => hits.slice(0, 3).map((h) => "“" + h + "”").join(", ");
+
+// --------------------------------------------------------------------------
+// Rules (weights match the Python package)
+// --------------------------------------------------------------------------
+function finding(rule, weight, description, category) { return { rule, weight, description, category }; }
+
+function ruleReplyTo(email) {
+  const fromReg = registrableDomain(email.fromDomain);
+  for (const addr of email.replyTo) {
+    const rtReg = registrableDomain(domainOf(addr));
+    if (fromReg && rtReg && rtReg !== fromReg) {
+      return [finding("reply_to_mismatch", 2.0, `Replies would go to ${rtReg}, not the sender's domain ${fromReg}.`, "Sender")];
+    }
+  }
+  return [];
+}
+
+function ruleReturnPath(email) {
+  const fromReg = registrableDomain(email.fromDomain);
+  const rpReg = registrableDomain(domainOf(email.returnPath));
+  if (fromReg && rpReg && rpReg !== fromReg) {
+    return [finding("return_path_mismatch", 0.75, `Bounce address is on ${rpReg}, a different domain from the sender (${fromReg}).`, "Sender")];
+  }
+  return [];
+}
+
+function ruleAuth(email) {
+  let results = email.header("Authentication-Results").join(" ").toLowerCase();
+  for (const spf of email.header("Received-SPF")) results += " spf=" + spf.trim().split(" ")[0].toLowerCase();
+  const out = [];
+  const weights = { spf: 1.5, dkim: 1.5, dmarc: 2.5 };
+  const what = { spf: "the sending server isn't authorized for this domain", dkim: "the message signature is missing or invalid", dmarc: "the domain's anti-spoofing policy check" };
+  for (const [mech, weight] of Object.entries(weights)) {
+    const m = results.match(new RegExp("\\b" + mech + "=(fail|softfail|permerror|none)\\b"));
+    if (m) {
+      const w = m[1] === "fail" || m[1] === "permerror" ? weight : weight / 2;
+      out.push(finding(`${mech}_${m[1]}`, w, `${mech.toUpperCase()} check: ${m[1]} (${what[mech]}).`, "Sender"));
+    }
+  }
+  return out;
+}
+
+function ruleDisplayName(email) {
+  const out = [];
+  const name = email.fromName || "";
+  const embedded = name.match(/[\w.+-]+@([\w-]+\.[\w.-]+)/);
+  if (embedded && registrableDomain(embedded[1]) !== registrableDomain(email.fromDomain)) {
+    out.push(finding("display_name_address", 2.0, `The sender's name shows the address ${embedded[0]}, but the email really came from ${email.fromAddress}.`, "Sender"));
+  }
+  for (const brand of brandsMentioned(name)) {
+    if (!BRANDS[brand].includes(registrableDomain(email.fromDomain))) {
+      const weight = FREE_MAIL_DOMAINS.has(email.fromDomain) ? 2.5 : 2.0;
+      out.push(finding("brand_impersonation_sender", weight, `The sender's name says ${brandLabel(brand)}, but the address is ${email.fromAddress || "missing"}.`, "Sender"));
+      break;
+    }
+  }
+  return out;
+}
+
+function ruleSenderDomain(email) {
+  const out = [];
+  const brand = lookalikeBrand(email.fromDomain);
+  if (brand) out.push(finding("lookalike_sender_domain", 3.0, `The sender's domain ${email.fromDomain} imitates ${brandLabel(brand)}.`, "Sender"));
+  if (SUSPICIOUS_TLDS.has(email.fromDomain.split(".").pop())) {
+    out.push(finding("suspicious_sender_tld", 1.0, `The sender uses a domain ending often seen in abuse (.${email.fromDomain.split(".").pop()}).`, "Sender"));
+  }
+  return out;
+}
+
+function ruleUrls(email) {
+  const out = [];
+  const flagged = new Set();
+  const add = (rule, weight, desc) => {
+    if (!flagged.has(rule)) { flagged.add(rule); out.push(finding(rule, weight, desc, "Links")); }
+  };
+  const fromReg = registrableDomain(email.fromDomain);
+
+  for (const link of email.links) {
+    link.issues = [];
+    const flag = (rule, weight, desc, label) => { add(rule, weight, desc); link.issues.push(label); };
+    const url = link.url;
+    const lowered = url.toLowerCase();
+    if (/^(mailto:|tel:|#|cid:)/.test(lowered)) continue;
+    if (lowered.startsWith("data:")) { flag("data_uri_link", 2.5, "A link hides its content in a data: address.", "Data link"); continue; }
+    if (lowered.startsWith("javascript:")) { flag("javascript_link", 2.5, "A link runs a script instead of opening a page.", "Script link"); continue; }
+    const parsed = parseUrl(url);
+    const host = parsed ? parsed.hostname.toLowerCase() : "";
+    if (!host) continue;
+    link.host = host;
+    const reg = registrableDomain(host);
+
+    if (isIp(host)) flag("ip_address_url", 2.5, `A link goes to a bare IP address (${host}) instead of a named website.`, "IP address");
+    if (host.startsWith("xn--") || host.includes(".xn--")) flag("punycode_domain", 2.0, `A link uses an international domain that can mimic familiar letters (${host}).`, "Look-alike letters");
+    if (URL_SHORTENERS.has(reg)) flag("url_shortener", 1.0, `A link uses a URL shortener (${reg}) that hides where it goes.`, "Shortened");
+    if (SUSPICIOUS_TLDS.has(host.split(".").pop())) flag("suspicious_tld", 1.0, `A link uses a domain ending often seen in abuse (${host}).`, "Risky ending");
+    if (parsed && (parsed.username || parsed.password)) flag("userinfo_in_url", 2.0, "A link uses an “@” trick so the real destination is hidden after it.", "@ trick");
+    if ((host.match(/\./g) || []).length >= 4) flag("excessive_subdomains", 1.0, `A link has an unusually long chain of subdomains (${host}).`, "Many subdomains");
+    if (url.length > 150) flag("long_url", 0.5, "A link is unusually long.", "Very long");
+    const brand = lookalikeBrand(host);
+    if (brand) flag("lookalike_link_domain", 3.0, `A link goes to ${host}, which imitates ${brandLabel(brand)}.`, `Imitates ${brandLabel(brand)}`);
+    if (lowered.startsWith("http://") && /(login|signin|verify|account|secure|update|password)/.test(lowered)) {
+      flag("insecure_login_link", 1.0, "A sign-in or account link doesn't use a secure (https) connection.", "Not https");
+    }
+    const text = (link.text || "").trim();
+    const shown = text.match(/((?:https?:\/\/)?(?:[\w-]+\.)+[a-z]{2,})(?:\/\S*)?/i);
+    if (shown && text.includes(".") && !text.includes(" ")) {
+      const s = shown[1];
+      const shownReg = registrableDomain(urlHost(s.includes("://") ? s : "http://" + s));
+      if (shownReg && shownReg !== reg) {
+        flag("link_text_mismatch", 3.0, `A link shows ${shownReg} but actually goes to ${reg}.`, `Shows ${shownReg}`);
+      }
+    }
+  }
+
+  const external = new Set(email.links.map((l) => registrableDomain(urlHost(l.url))).filter(Boolean));
+  external.delete(fromReg);
+  if (fromReg && email.links.length && external.size >= 1) {
+    for (const brand of brandsMentioned(email.fullText)) {
+      if (!BRANDS[brand].includes(fromReg) && ![...external].some((d) => BRANDS[brand].includes(d))) {
+        add("brand_content_offsite_links", 1.0, `The email mentions ${brandLabel(brand)}, but neither the sender nor any link belongs to ${brandLabel(brand)}.`);
+        break;
+      }
+    }
+  }
+  if (email.hasForms) add("html_form", 2.0, "The email contains a fill-in form. Real companies don't ask you to type details into an email.");
+  return out;
+}
+
+function ruleContent(email) {
+  const out = [];
+  const text = email.fullText;
+  const groups = [
+    ["urgency_language", URGENCY_PATTERNS, 1.0, 0.5, "Pressure to act fast"],
+    ["threat_language", THREAT_PATTERNS, 1.5, 0.5, "Threats about your account"],
+    ["credential_request", CREDENTIAL_PATTERNS, 1.5, 0.75, "Asks for passwords or personal details"],
+    ["financial_lure", FINANCIAL_PATTERNS, 1.0, 0.5, "Money bait"],
+  ];
+  for (const [rule, patterns, base, perExtra, label] of groups) {
+    const hits = findPatterns(text, patterns);
+    if (hits.length) {
+      const weight = Math.min(base + perExtra * (hits.length - 1), base * 2.5);
+      out.push(finding(rule, weight, `${label}: ${quoteList(hits)}.`, "Wording"));
+    }
+  }
+  if (findPatterns(email.body, GENERIC_GREETINGS).length) {
+    out.push(finding("generic_greeting", 0.75, "Uses a generic greeting instead of your name.", "Wording"));
+  }
+  const letters = Array.from(email.subject).filter((c) => /\p{L}/u.test(c));
+  if (letters.length >= 10 && letters.filter((c) => c === c.toUpperCase() && c !== c.toLowerCase()).length / letters.length > 0.7) {
+    out.push(finding("shouting_subject", 0.5, "The subject is mostly in capital letters.", "Wording"));
+  }
+  if (/^\s*(re|fwd?|fw)\s*:/i.test(email.subject) && !email.header("In-Reply-To").length && !email.header("References").length) {
+    out.push(finding("fake_reply", 0.75, "The subject looks like a reply, but there's no earlier conversation.", "Wording"));
+  }
+  return out;
+}
+
+function ruleAttachments(email) {
+  const out = [];
+  for (const name of email.attachments) {
+    const lowered = name.toLowerCase().trim();
+    const idx = lowered.lastIndexOf(".");
+    const ext = idx >= 0 ? lowered.slice(idx + 1) : "";
+    const stem = idx >= 0 ? lowered.slice(0, idx) : lowered;
+    const idx2 = stem.lastIndexOf(".");
+    const innerExt = idx2 >= 0 ? stem.slice(idx2 + 1) : null;
+    if (innerExt !== null && DANGEROUS_EXTENSIONS.has(ext) && innerExt.length <= 4) {
+      out.push(finding("double_extension", 3.0, `The attachment “${name}” disguises a .${ext} file as a .${innerExt}.`, "Attachments"));
+    } else if (DANGEROUS_EXTENSIONS.has(ext)) {
+      out.push(finding("dangerous_attachment", 2.5, `The attachment “${name}” is a file type that can run code (.${ext}).`, "Attachments"));
+    } else if (ARCHIVE_EXTENSIONS.has(ext)) {
+      out.push(finding("archive_attachment", 1.0, `The attachment “${name}” is a compressed archive, which can hide other files.`, "Attachments"));
+    }
+  }
+  return out;
+}
+
+const RULES = [ruleReplyTo, ruleReturnPath, ruleAuth, ruleDisplayName, ruleSenderDomain, ruleUrls, ruleContent, ruleAttachments];
+const RULE_MIDPOINT = 4.0, RULE_STEEPNESS = 0.8, SUSPICIOUS = 0.4, PHISHING = 0.7;
+
+function analyze(raw) {
+  const email = parseEmail(raw);
+  const findings = RULES.flatMap((r) => r(email)).sort((a, b) => b.weight - a.weight);
+  const total = findings.reduce((s, f) => s + f.weight, 0);
+  const score = total <= 0 ? 0 : 1 / (1 + Math.exp(-RULE_STEEPNESS * (total - RULE_MIDPOINT)));
+  const verdict = score >= PHISHING ? "phishing" : score >= SUSPICIOUS ? "suspicious" : "legitimate";
+  return { email, findings, score, verdict };
+}
+
+// --------------------------------------------------------------------------
+// UI. All email content is inserted as text, never as HTML.
+// --------------------------------------------------------------------------
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === false || v === null || v === undefined) continue;
+    if (k === "class") node.className = v;
+    else if (k === "style") node.style.cssText = v;
+    else node.setAttribute(k, v);
+  }
+  for (const c of children.flat()) {
+    if (c === null || c === undefined || c === false) continue;
+    node.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return node;
+}
+
+const VERDICT_TEXT = {
+  phishing: ["Phishing", "Strong signs this is a phishing email. Don't click its links, open its attachments or reply."],
+  suspicious: ["Suspicious", "Some warning signs. Check with the sender through a channel you already trust before acting on it."],
+  legitimate: ["Looks safe", "No strong warning signs found. Still be careful with unexpected requests for money or passwords."],
+};
+
+const fmtPts = (w) => "+" + (Math.round(w * 100) / 100).toString();
+
+function render(result) {
+  const root = document.getElementById("result");
+  const title = document.getElementById("out-title");
+  root.replaceChildren(title);
+
+  const source = document.getElementById("source").value;
+  if (!source.trim()) {
+    root.append(el("div", { class: "pane-body" },
+      el("p", { class: "section-title" }, "Result"),
+      el("p", { class: "empty" }, "Paste an email on the left, open an .eml file, or pick an example to see a verdict here.")));
+    return;
+  }
+
+  const { email, findings, score, verdict } = result;
+  const pct = Math.round(score * 100);
+  const [word, note] = VERDICT_TEXT[verdict];
+
+  const meta = el("dl", { class: "meta" });
+  const addMeta = (k, v) => { if (v) meta.append(el("dt", {}, k), el("dd", {}, v)); };
+  addMeta("From", email.fromName ? `${email.fromName} <${email.fromAddress}>` : email.fromAddress);
+  addMeta("Reply-To", email.replyTo.join(", "));
+  addMeta("Subject", email.subject);
+
+  root.append(el("div", { class: "verdict", "data-v": verdict },
+    el("div", { class: "verdict-row" },
+      el("p", { class: "verdict-word" }, word),
+      el("span", { class: "verdict-score" }, "Risk score ", el("b", {}, String(pct)), " / 100")),
+    el("div", {},
+      el("div", { class: "meter", role: "img", "aria-label": `Risk score ${pct} out of 100` },
+        el("div", { class: "meter-fill", style: `width:${Math.max(pct, 1)}%` })),
+      el("div", { class: "meter-scale", "aria-hidden": "true" },
+        el("span", { class: "end", style: "left:0" }, "0"),
+        el("span", { style: "left:40%" }, "40 suspicious"),
+        el("span", { style: "left:70%" }, "70 phishing"))),
+    el("p", { class: "verdict-note" }, note),
+    meta.childElementCount ? meta : null));
+
+  const body = el("div", { class: "pane-body" });
+  root.append(body);
+
+  if (!email.hasHeaders) {
+    body.append(el("p", { class: "notice" },
+      "This looks like the message text only, so the sender checks were skipped. Paste the full original source for a complete check (see “How do I get an email's original source?”)."));
+  }
+
+  body.append(el("p", { class: "section-title" }, "Warning signs ", el("span", { class: "count" }, String(findings.length))));
+  if (findings.length) {
+    body.append(el("ul", { class: "findings" }, findings.map((f) =>
+      el("li", {},
+        el("span", { class: "pts" + (f.weight >= 2.5 ? " high" : f.weight >= 1.5 ? " mid" : ""), title: "Points added to the risk score" }, fmtPts(f.weight)),
+        el("div", {}, el("p", { class: "f-text" }, f.description), el("span", { class: "f-cat" }, f.category))))));
+  } else {
+    body.append(el("p", { class: "empty" }, "None found."));
+  }
+
+  const links = email.links.filter((l) => !/^(mailto:|tel:|#|cid:)/i.test(l.url));
+  if (links.length) {
+    body.append(el("p", { class: "section-title" }, "Where the links really go ", el("span", { class: "count" }, String(links.length))));
+    body.append(el("div", { class: "table-wrap" }, el("table", {},
+      el("thead", {}, el("tr", {}, el("th", {}, "Text you see"), el("th", {}, "Actual destination"))),
+      el("tbody", {}, links.map((l) => el("tr", {},
+        el("td", { class: "shown" }, l.text || "(bare link)"),
+        el("td", { class: "url" }, l.url,
+          el("div", { class: "chips" }, (l.issues || []).length
+            ? l.issues.map((i) => el("span", { class: "chip" }, i))
+            : el("span", { class: "chip ok" }, "No issues found")))))))));
+  }
+
+  if (email.attachments.length) {
+    body.append(el("p", { class: "section-title" }, "Attachments ", el("span", { class: "count" }, String(email.attachments.length))));
+    body.append(el("ul", { class: "findings" }, email.attachments.map((a) => el("li", { style: "grid-template-columns:minmax(0,1fr)" }, el("p", { class: "f-text", style: "font-family:var(--font-mono);font-size:0.8125rem" }, a)))));
+  }
+}
+
+const sourceBox = document.getElementById("source");
+const sampleSelect = document.getElementById("sample");
+let timer = null;
+
+function run() {
+  clearTimeout(timer);
+  let result = null;
+  try { result = analyze(sourceBox.value); }
+  catch (e) { result = { email: parseEmail(""), findings: [], score: 0, verdict: "legitimate" }; console.error(e); }
+  render(result);
+}
+
+sampleSelect.append(el("option", { value: "" }, "Choose an example…"));
+for (const group of ["phishing", "legitimate"]) {
+  const og = el("optgroup", { label: group === "phishing" ? "Phishing examples" : "Legitimate examples" });
+  SAMPLES.forEach((s, i) => { if (s.group === group) og.append(el("option", { value: String(i) }, s.label)); });
+  sampleSelect.append(og);
+}
+sampleSelect.addEventListener("change", () => {
+  const s = SAMPLES[Number(sampleSelect.value)];
+  if (sampleSelect.value !== "" && s) { sourceBox.value = s.raw; run(); }
+});
+sourceBox.addEventListener("input", () => {
+  sampleSelect.value = "";
+  clearTimeout(timer);
+  timer = setTimeout(run, 200);
+});
+document.getElementById("clear").addEventListener("click", () => {
+  sourceBox.value = ""; sampleSelect.value = ""; run(); sourceBox.focus();
+});
+
+function loadFile(file) {
+  if (!file) return;
+  if (/\.msg$/i.test(file.name)) {
+    sourceBox.value = "";
+    run();
+    document.getElementById("result").append(el("div", { class: "pane-body" },
+      el("p", { class: "notice" }, "Outlook .msg files can't be read here. In Outlook, open the email and use View → View message source, then paste it on the left.")));
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => { sourceBox.value = String(reader.result || ""); sampleSelect.value = ""; run(); };
+  reader.readAsText(file);
+}
+document.getElementById("file").addEventListener("change", (e) => { loadFile(e.target.files[0]); e.target.value = ""; });
+sourceBox.addEventListener("dragover", (e) => { e.preventDefault(); sourceBox.classList.add("dragging"); });
+sourceBox.addEventListener("dragleave", () => sourceBox.classList.remove("dragging"));
+sourceBox.addEventListener("drop", (e) => {
+  sourceBox.classList.remove("dragging");
+  if (e.dataTransfer && e.dataTransfer.files.length) { e.preventDefault(); loadFile(e.dataTransfer.files[0]); }
+});
+
+// Open on a worked example so the first view shows what the tool does.
+if (!sourceBox.value.trim() && SAMPLES.length) {
+  sampleSelect.value = "0";
+  sourceBox.value = SAMPLES[0].raw;
+}
+run();
+</script>

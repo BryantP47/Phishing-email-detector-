@@ -380,7 +380,7 @@ def rule_content(email: ParsedEmail) -> List[Finding]:
     letters = [c for c in subject if c.isalpha()]
     if len(letters) >= 10 and sum(c.isupper() for c in letters) / len(letters) > 0.7:
         findings.append(Finding("shouting_subject", 0.5, "Subject is mostly upper case", "content"))
-    if re.search(r"(re|fwd?):", subject, re.IGNORECASE) and not email.header("In-Reply-To") and not email.header("References"):
+    if re.match(r"\s*(re|fwd?|fw)\s*:", subject, re.IGNORECASE) and not email.header("In-Reply-To") and not email.header("References"):
         findings.append(Finding("fake_reply", 0.75, "Subject looks like a reply but there is no thread history", "content"))
     return findings
 

@@ -28,6 +28,14 @@ phishing, `2` on errors, otherwise `0`, so it can be used in scripts.
 
 Install as a command with `pip install .` to get `phishing-detector`.
 
+## Web version
+
+`web/index.html` is a single page that runs the same rule checks in the browser:
+open it, paste an email's original source (or drop an `.eml` file) and see the
+verdict, the warning signs and where each link really goes. Nothing is uploaded.
+It covers the rules only, not the trainable model. After changing
+`web/template.html` or the samples, rebuild it with `python web/build.py`.
+
 ## What it checks
 
 | Category | Indicators |

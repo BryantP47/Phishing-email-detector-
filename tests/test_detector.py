@@ -117,6 +117,10 @@ class RuleTests(unittest.TestCase):
         self.assertTrue({"generic_greeting", "threat_language", "credential_request", "urgency_language",
                          "financial_lure", "fake_reply", "shouting_subject"} <= hits, hits)
 
+    def test_fake_reply_needs_prefix(self):
+        self.assertNotIn("fake_reply", rules_hit(make_email(subject="Your credit score: updated")))
+        self.assertIn("fake_reply", rules_hit(make_email(subject="Fwd: invoice")))
+
     def test_attachments(self):
         raw = (
             "From: a@example.org\nSubject: docs\nMIME-Version: 1.0\n"
